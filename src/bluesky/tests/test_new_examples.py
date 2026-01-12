@@ -1035,9 +1035,25 @@ def test_device_has_new_read_configuration_once_per_stream_and_cached_once(RE, h
     config_values = [0, 1, 2, 3]
     iterations = 2
 
-    mock_read_configuration = Mock(wraps=device.read_configuration)
-    device.read_configuration = mock_read_configuration
+    expected_config_calls = len(config_values)
+    expected_read_calls = expected_config_calls * iterations
+
+    mock_read_config = Mock(wraps=device.read_configuration)
+    device.read_configuration = mock_read_config
+
+    mock_describe_config = Mock(wraps=device.describe_configuration)
+    device.describe_configuration = mock_describe_config
+
+    mock_read = Mock(wraps=device.read)
+    device.read = mock_read
+
+    mock_describe = Mock(wraps=device.describe)
+    device.describe = mock_describe
 
     RE(multi_stream_plan(device, config_values, iterations), docs.append)
 
-    assert mock_read_configuration.call_count == 4
+    assert mock_read_config.call_count == expected_config_calls
+    assert mock_describe_config.call_count == expected_config_calls
+
+    assert mock_read.call_count == expected_read_calls
+    assert mock_describe.call_count == expected_read_calls

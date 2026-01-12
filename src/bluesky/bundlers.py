@@ -93,6 +93,11 @@ class RunBundler:
         # " obj.read_configuration() timestamps
         config_ts_cache: ObjDict[Any] = field(default_factory=dict)
 
+        def clear_read_cache(self):
+            self.read_cache.clear()
+            self.describe_cache.clear()
+            self.describe_collect_cache.clear()
+
     def __init__(
         self,
         md: dict | None,
@@ -344,8 +349,8 @@ class RunBundler:
                 "bundle is closed with a 'save' or "
                 "'drop' message."
             )
-        self._current_stream_cache = RunBundler._StreamCache()
-        self._saved_stream_cache.clear()
+        # self._current_stream_cache = RunBundler._StreamCache()
+        # self._saved_stream_cache.clear()
         self._objs_read.clear()
         self.bundling = True
         command, obj, args, kwargs, _ = msg
@@ -362,6 +367,14 @@ class RunBundler:
         if self._strict_pre_declare:
             if self._bundle_name not in self._descriptors:
                 raise IllegalMessageSequence("In strict mode you must pre-declare streams.")
+
+        stream_name = self._bundle_name
+        if stream_name in self._saved_stream_cache:
+            self._current_stream_cache = self._saved_stream_cache[stream_name]
+            self._current_stream_cache.clear_read_cache()
+        else:
+            self._current_stream_cache = RunBundler._StreamCache()
+            self._saved_stream_cache[stream_name] = self._current_stream_cache
 
     async def read(self, msg, reading):
         """
