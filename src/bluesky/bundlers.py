@@ -96,12 +96,6 @@ class _StreamCache:
     # obj.read_configuration() timestamps
     config_ts_cache: ObjDict[Any] = field(default_factory=dict)
 
-    def clear_readable_cache(self):
-        """Clear the cache of Readable methods so new data can be stored."""
-        self.read_cache.clear()
-        self.describe_cache.clear()
-        self.describe_collect_cache.clear()
-
     async def ensure_cached(self, obj, collect=False):
         """Cache objects Readable and Configurable methods. Cache Collectable methods if collect is True."""
         coros = []
@@ -370,7 +364,7 @@ class RunBundler:
     def _set_current_stream_cache(self, stream_name: str):
         if stream_name in self._saved_stream_cache:
             self._current_stream_cache = self._saved_stream_cache[stream_name]
-            self._current_stream_cache.clear_readable_cache()
+            self._current_stream_cache.read_cache.clear()
         else:
             self._current_stream_cache = _StreamCache()
             self._saved_stream_cache[stream_name] = self._current_stream_cache

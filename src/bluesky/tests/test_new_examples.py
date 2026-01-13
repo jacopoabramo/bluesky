@@ -1029,31 +1029,31 @@ def test_device_has_new_read_configuration_once_per_stream(RE, hw):
             assert docs["event"][i + v]["data"][pv] == device.read_value
 
 
-def test_device_has_new_read_configuration_once_per_stream_and_cached_once(RE, hw):
+def test_cache_used_correct_number_of_times_for_object(RE, hw):
     docs = DocHolder()
     device = MultiConfiguredDevice(hw.motor, "device")
     config_values = [0, 1, 2, 3]
     iterations = 2
 
-    expected_config_calls = len(config_values)
-    expected_read_calls = expected_config_calls * iterations
+    expected_config_calls = len(config_values)  # New config cache used once per stream.
+    expected_config_describe_calls = len(config_values)  # New config_describe cache used once per stream.
+    expected_read_calls = expected_config_calls * iterations  # New read cache used on each event.
+    expected_read_describe_calls = len(config_values)  # New read_describe used once per stream.
 
     mock_read_config = Mock(wraps=device.read_configuration)
     device.read_configuration = mock_read_config
-
     mock_describe_config = Mock(wraps=device.describe_configuration)
     device.describe_configuration = mock_describe_config
 
     mock_read = Mock(wraps=device.read)
     device.read = mock_read
-
     mock_describe = Mock(wraps=device.describe)
     device.describe = mock_describe
 
     RE(multi_stream_plan(device, config_values, iterations), docs.append)
 
     assert mock_read_config.call_count == expected_config_calls
-    assert mock_describe_config.call_count == expected_config_calls
+    assert mock_describe_config.call_count == expected_config_describe_calls
 
     assert mock_read.call_count == expected_read_calls
-    assert mock_describe.call_count == expected_read_calls
+    assert mock_describe.call_count == expected_read_describe_calls
