@@ -82,12 +82,6 @@ class _StreamCache:
     # cache of all obj.describe() output
     describe_cache: ObjDict[DataKey] = field(default_factory=dict)
 
-    # Collectable
-    # cache of all obj.describe_collect() output
-    describe_collect_cache: dict[Any, dict[str, DataKey] | dict[str, dict[str, DataKey]]] = field(
-        default_factory=dict
-    )
-
     # Configurable
     # obj.describe_configuration()
     config_desc_cache: ObjDict[DataKey] = field(default_factory=dict)
@@ -101,8 +95,6 @@ class _StreamCache:
         coros = []
         if not collect and obj not in self.describe_cache:
             coros.append(self._cache_describe(obj))
-        elif collect and obj not in self.describe_collect_cache:
-            coros.append(self._cache_describe_collect(obj))
 
         if obj not in self.config_desc_cache:
             coros.append(self._cache_describe_config(obj))
@@ -113,12 +105,6 @@ class _StreamCache:
         "Read the object's describe and cache it."
         obj = check_supports(obj, Readable)
         self.describe_cache[obj] = await maybe_await(obj.describe())
-
-    async def _cache_describe_collect(self, obj: Collectable):
-        "Read the object's describe_collect and cache it."
-        obj = check_supports(obj, Collectable)
-        c: dict[str, DataKey] | dict[str, dict[str, DataKey]] = await maybe_await(obj.describe_collect())
-        self.describe_collect_cache[obj] = c
 
     async def _cache_describe_config(self, obj):
         "Read the object's describe_configuration and cache it."
@@ -163,6 +149,9 @@ class RunBundler:
         self._run_start_uid = None  # The (future) runstart uid
         self._objs_read: deque[HasName] = deque()  # objects read in one Event
 
+        # Collectable
+        # cache of all obj.describe_collect() output
+        self._describe_collect_cache: dict[Any, dict[str, DataKey] | dict[str, dict[str, DataKey]]] = dict()  # noqa: C408
         self._saved_stream_cache: dict[str, _StreamCache] = dict()  # noqa: C408
         self._current_stream_cache: _StreamCache = _StreamCache()
 
@@ -208,6 +197,8 @@ class RunBundler:
 
         self._current_stream_cache = _StreamCache()
         self._saved_stream_cache.clear()
+
+        self._describe_collect_cache.clear()
 
         await self.emit(DocumentNames.start, doc)
         doc_logger.debug(
@@ -337,10 +328,10 @@ class RunBundler:
 
         self._set_current_stream_cache(stream_name)
 
-        await asyncio.gather(*[self._current_stream_cache.ensure_cached(obj, collect=collect) for obj in objs])
+        await asyncio.gather(*[self._ensure_cached(obj, collect=collect) for obj in objs])
         for obj in objs:
             if collect:
-                data_keys = self._current_stream_cache.describe_collect_cache[obj]
+                data_keys = self._describe_collect_cache[obj]
                 streams_and_data_keys = self._format_datakeys_with_stream_name(
                     data_keys, message_stream_name=stream_name
                 )
@@ -783,9 +774,9 @@ class RunBundler:
             }
 
         """
-        await self._current_stream_cache.ensure_cached(collect_object, collect=True)
+        await self._cache_describe_collect(collect_object)
 
-        describe_collect = self._current_stream_cache.describe_collect_cache[collect_object]
+        describe_collect = self._describe_collect_cache[collect_object]
         describe_collect_items = self._format_datakeys_with_stream_name(describe_collect)
 
         local_descriptors: dict[frozenset[str], ComposeDescriptorBundle] = {}
@@ -816,6 +807,12 @@ class RunBundler:
             )
 
         for stream_name, stream_data_keys in describe_collect_items:
+            # Will this be okay left at last stream?
+            self._set_current_stream_cache(stream_name)
+            # Should we make the describe_cache the describe_collect_cache?
+            self._current_stream_cache.describe_cache[collect_object] = stream_data_keys
+            await self._current_stream_cache.ensure_cached(collect_object, collect=True)
+
             if stream_name not in self._descriptor_objs or (
                 collect_object not in self._descriptor_objs[stream_name]
             ):
@@ -1122,6 +1119,7 @@ class RunBundler:
                         "the objects first and provide the stream name"
                     )
                 else:
+                    print(f"stream_name: {stream_name}")
                     await self._describe_collect(collect_objects[0])
 
         # Get the indicies from the collect objects
@@ -1146,6 +1144,7 @@ class RunBundler:
         indices_difference = await self._pack_external_assets(
             collected_asset_docs, message_stream_name=stream_name
         )
+        print(f"stream_name: {stream_name}")
 
         # Make event pages for an object which is EventCollectable or EventPageCollectable
         # objects that are EventCollectable will now group the Events and Emit an Event Page
@@ -1220,3 +1219,16 @@ class RunBundler:
                 del self._descriptors[name]
                 await self._prepare_stream(name, obj_set)
                 continue
+
+    async def _cache_describe_collect(self, obj: Collectable):
+        "Read the object's describe_collect and cache it."
+        if obj not in self._describe_collect_cache:
+            obj = check_supports(obj, Collectable)
+            c: dict[str, DataKey] | dict[str, dict[str, DataKey]] = await maybe_await(obj.describe_collect())
+            self._describe_collect_cache[obj] = c
+
+    async def _ensure_cached(self, obj, collect: bool = False):
+        coros = [self._current_stream_cache.ensure_cached(obj, collect)]
+        if collect:
+            coros.append(self._cache_describe_collect(obj))
+        await asyncio.gather(*coros)
