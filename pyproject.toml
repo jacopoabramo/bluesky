@@ -53,6 +53,7 @@ dev = [
     "myst-parser",
     "networkx",
     "numpydoc",
+    "opentelemetry-sdk",
     "ophyd",
     "orjson",
     "packaging",
