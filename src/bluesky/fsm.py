@@ -1,4 +1,5 @@
 """RunEngine state machine module."""
+
 import threading
 from enum import Enum
 from typing import TYPE_CHECKING
@@ -14,6 +15,7 @@ if TYPE_CHECKING:
 
 class TransitionError(RuntimeError):
     """Raised when an invalid transition is attempted."""
+
 
 # mapping of valid state transitions.
 _TRANSITIONS: dict[str, frozenset[str]] = {
