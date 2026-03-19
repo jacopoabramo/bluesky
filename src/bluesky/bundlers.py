@@ -1144,7 +1144,6 @@ class RunBundler:
         indices_difference = await self._pack_external_assets(
             collected_asset_docs, message_stream_name=stream_name
         )
-        print(f"stream_name: {stream_name}")
 
         # Make event pages for an object which is EventCollectable or EventPageCollectable
         # objects that are EventCollectable will now group the Events and Emit an Event Page
