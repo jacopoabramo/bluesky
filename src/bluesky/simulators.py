@@ -200,11 +200,13 @@ class RunEngineSimulator:
         self.message_handlers.insert(
             cast(int, index if index != END else len(self.message_handlers)),
             _MessageHandler(
-                lambda msg: msg.command in commands
-                and (
-                    msg_filter is None
-                    or (callable(msg_filter) and msg_filter(msg))
-                    or (msg.obj and msg.obj.name == msg_filter)
+                lambda msg: (
+                    msg.command in commands
+                    and (
+                        msg_filter is None
+                        or (callable(msg_filter) and msg_filter(msg))
+                        or (msg.obj and msg.obj.name == msg_filter)
+                    )
                 ),
                 handler,
             ),
@@ -299,7 +301,7 @@ class RunEngineSimulator:
         self.add_handler(
             "wait",
             handler,
-            lambda msg: (group == RunEngineSimulator.GROUP_ANY or msg.kwargs["group"] == group),
+            lambda msg: group == RunEngineSimulator.GROUP_ANY or msg.kwargs["group"] == group,
         )
 
     def add_callback_handler_for(

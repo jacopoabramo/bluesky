@@ -90,7 +90,7 @@ class HasName(Protocol):
     def name(self) -> str:
         """Used to populate object_keys in the Event DataKey
 
-        https://blueskyproject.io/event-model/event-descriptors.html#object-keys"""
+        https://blueskyproject.io/event-model/main/explanations/event-descriptors.html#object-keys"""
         ...
 
 

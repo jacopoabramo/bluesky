@@ -859,7 +859,6 @@ class RunBundler:
 
         return indices_difference
 
-    # message strem name here?
     async def _pack_external_assets(
         self, asset_docs: Iterable[Asset | StreamAsset], message_stream_name: str | None
     ):
