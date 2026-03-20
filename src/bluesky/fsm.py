@@ -18,16 +18,16 @@ class TransitionError(RuntimeError):
 
 
 # mapping of valid state transitions.
-_TRANSITIONS: dict[str, frozenset[str]] = {
-    "idle": frozenset(["running", "panicked"]),
-    "running": frozenset(["idle", "pausing", "halting", "stopping", "aborting", "suspending", "panicked"]),
-    "pausing": frozenset(["paused", "idle", "halting", "aborting", "panicked"]),
-    "suspending": frozenset(["running", "halting", "aborting", "panicked"]),
-    "paused": frozenset(["idle", "running", "halting", "stopping", "aborting", "panicked"]),
-    "halting": frozenset(["idle", "panicked"]),
-    "stopping": frozenset(["idle", "panicked"]),
-    "aborting": frozenset(["idle", "panicked"]),
-    "panicked": frozenset([]),
+_TRANSITIONS: dict[str, list[str]] = {
+    "idle": ["running", "panicked"],
+    "running": ["idle", "pausing", "halting", "stopping", "aborting", "suspending", "panicked"],
+    "pausing": ["paused", "idle", "halting", "aborting", "panicked"],
+    "suspending": ["running", "halting", "aborting", "panicked"],
+    "paused": ["idle", "running", "halting", "stopping", "aborting", "panicked"],
+    "halting": ["idle", "panicked"],
+    "stopping": ["idle", "panicked"],
+    "aborting": ["idle", "panicked"],
+    "panicked": [],
 }
 
 
