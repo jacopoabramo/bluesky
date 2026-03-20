@@ -2,7 +2,7 @@
 
 import threading
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, overload
 from weakref import WeakKeyDictionary
 
 from .log import state_logger
@@ -177,9 +177,13 @@ class MachineDescriptor:
             self._memory[obj] = fsm
             return fsm
 
-    def __get__(self, obj: "RunEngine | None", owner: type) -> RunEngineStateMachine:
+    @overload
+    def __get__(self, obj: None, owner: type) -> "MachineDescriptor": ...
+    @overload
+    def __get__(self, obj: "RunEngine", owner: type) -> RunEngineStateMachine: ...
+    def __get__(self, obj: "RunEngine | None", owner: type) -> RunEngineStateMachine | "MachineDescriptor":
         if obj is None:
-            return self  # type: ignore[return-value]
+            return self
         with obj._state_lock:
             return self._get_or_create(obj)
 
