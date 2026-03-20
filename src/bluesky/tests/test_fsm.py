@@ -60,6 +60,7 @@ def test_transitions():
     assert _TRANSITIONS["aborting"] == ["idle", "panicked"]
     assert _TRANSITIONS["panicked"] == []
 
+
 def test_multi_obj_fsm():
 
     owner = Owner()
