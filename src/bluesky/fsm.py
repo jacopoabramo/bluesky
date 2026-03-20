@@ -181,7 +181,7 @@ class MachineDescriptor:
     def __get__(self, obj: None, owner: type) -> "MachineDescriptor": ...
     @overload
     def __get__(self, obj: "RunEngine", owner: type) -> RunEngineStateMachine: ...
-    def __get__(self, obj: "RunEngine | None", owner: type) -> RunEngineStateMachine | "MachineDescriptor":
+    def __get__(self, obj: "RunEngine | None", owner: type) -> "RunEngineStateMachine | MachineDescriptor":
         if obj is None:
             return self
         with obj._state_lock:
