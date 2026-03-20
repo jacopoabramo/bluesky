@@ -16,7 +16,9 @@ class Borrower:
     fsm = MachineDescriptor()
 
     def __init__(self, fsm: RunEngineStateMachine, lock: threading.RLock) -> None:
-        self.fsm = fsm
+        # the expected type of fsm.__set__ is RunEngine, but
+        # for testing the functionality we can ignore the type mismatch...
+        self.fsm = fsm  # type: ignore[arg-type]
         self._state_lock = lock
 
 
