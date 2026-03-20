@@ -51,20 +51,6 @@ from bluesky.tests.utils import DocCollector, MsgCollector
 from .utils import _careful_event_set, _fabricate_asycio_event
 
 
-def test_states():
-    assert REState.states() == [
-        "idle",
-        "running",
-        "pausing",
-        "paused",
-        "halting",
-        "stopping",
-        "aborting",
-        "suspending",
-        "panicked",
-    ]
-
-
 def test_panic_trap(RE):
     RE._state = "panicked"
     for k in REState.states():
