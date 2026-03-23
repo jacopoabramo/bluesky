@@ -12,7 +12,7 @@ import pytest
 from event_model import DocumentNames
 
 from bluesky import Msg, RunEngine
-from bluesky.fsm import REState
+from bluesky.fsm import RunEngineState
 from bluesky.plan_stubs import (
     abs_set,
     checkpoint,
@@ -53,7 +53,7 @@ from .utils import _careful_event_set, _fabricate_asycio_event
 
 def test_panic_trap(RE):
     RE._state = "panicked"
-    for k in REState.states():
+    for k in RunEngineState.states():
         if k != "panicked":
             with pytest.raises(TransitionError):
                 RE._state = k

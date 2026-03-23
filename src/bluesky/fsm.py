@@ -31,7 +31,7 @@ _TRANSITIONS: dict[str, list[str]] = {
 }
 
 
-class REState(str, Enum):
+class RunEngineState(str, Enum):
     IDLE = "idle"
     RUNNING = "running"
     PAUSING = "pausing"
@@ -48,15 +48,15 @@ class REState(str, Enum):
 
 
 class RunEngineStateMachine:
-    def __init__(self, on_transition: "Callable[[REState, REState], None] | None" = None) -> None:
-        self._state = REState.IDLE
+    def __init__(self, on_transition: "Callable[[RunEngineState, RunEngineState], None] | None" = None) -> None:
+        self._state = RunEngineState.IDLE
         self._lock = threading.RLock()
         self._on_transition = on_transition
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, str):
             return self._state.value == other
-        if isinstance(other, REState):
+        if isinstance(other, RunEngineState):
             return self._state == other
         if isinstance(other, RunEngineStateMachine):
             return self._state == other._state
@@ -70,55 +70,55 @@ class RunEngineStateMachine:
 
     @property
     def is_idle(self) -> bool:
-        return self._state == REState.IDLE
+        return self._state == RunEngineState.IDLE
 
     @property
     def is_running(self) -> bool:
-        return self._state == REState.RUNNING
+        return self._state == RunEngineState.RUNNING
 
     @property
     def is_pausing(self) -> bool:
-        return self._state == REState.PAUSING
+        return self._state == RunEngineState.PAUSING
 
     @property
     def is_paused(self) -> bool:
-        return self._state == REState.PAUSED
+        return self._state == RunEngineState.PAUSED
 
     @property
     def is_halting(self) -> bool:
-        return self._state == REState.HALTING
+        return self._state == RunEngineState.HALTING
 
     @property
     def is_stopping(self) -> bool:
-        return self._state == REState.STOPPING
+        return self._state == RunEngineState.STOPPING
 
     @property
     def is_aborting(self) -> bool:
-        return self._state == REState.ABORTING
+        return self._state == RunEngineState.ABORTING
 
     @property
     def is_suspending(self) -> bool:
-        return self._state == REState.SUSPENDING
+        return self._state == RunEngineState.SUSPENDING
 
     @property
     def is_panicked(self) -> bool:
-        return self._state == REState.PANICKED
+        return self._state == RunEngineState.PANICKED
 
     @property
     def can_pause(self) -> bool:
         return "pausing" in _TRANSITIONS[self._state.value]
 
-    def set(self, new_state: str | REState) -> tuple[REState, REState]:
+    def set(self, new_state: str | RunEngineState) -> tuple[RunEngineState, RunEngineState]:
         """Put the FSM into a new state.
 
         Parameters
         ----------
-        new_state: str | REState
+        new_state: str | RunEngineState
             The new state to transition to.
 
         Returns
         -------
-        tuple[REState, REState]
+        tuple[RunEngineState, RunEngineState]
             A tuple of (old_state, new_state) after the transition.
 
         Raises
@@ -128,7 +128,7 @@ class RunEngineStateMachine:
             to the new state is not allowed.
 
         Returns (old, new) for the caller to use (e.g. logging)."""
-        new = REState(new_state)
+        new = RunEngineState(new_state)
         with self._lock:
             old = self._state
             allowed = _TRANSITIONS[old.value]
@@ -169,7 +169,7 @@ class MachineDescriptor:
         with obj._state_lock:
             return self._get_or_create(obj)
 
-    def __set__(self, obj: "RunEngine", value: str | REState) -> None:
+    def __set__(self, obj: "RunEngine", value: str | RunEngineState) -> None:
         with obj._state_lock:
             old, new = self._get_or_create(obj).set(value)
         tags = {"old_state": old, "new_state": new, "RE": self}

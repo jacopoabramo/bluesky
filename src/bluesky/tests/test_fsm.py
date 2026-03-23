@@ -2,7 +2,7 @@ import threading
 
 import pytest
 
-from bluesky.fsm import _TRANSITIONS, MachineDescriptor, REState, RunEngineStateMachine
+from bluesky.fsm import _TRANSITIONS, MachineDescriptor, RunEngineState, RunEngineStateMachine
 
 
 class Owner:
@@ -29,7 +29,7 @@ class OwnerNoLock:
 
 
 def test_states():
-    assert REState.states() == [
+    assert RunEngineState.states() == [
         "idle",
         "running",
         "pausing",
