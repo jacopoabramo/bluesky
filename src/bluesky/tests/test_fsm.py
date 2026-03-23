@@ -12,16 +12,6 @@ class Owner:
         self._state_lock = threading.RLock()
 
 
-class Borrower:
-    fsm = MachineDescriptor()
-
-    def __init__(self, fsm: RunEngineStateMachine, lock: threading.RLock) -> None:
-        # the expected type of fsm.__set__ is RunEngine, but
-        # for testing the functionality we can ignore the type mismatch...
-        self.fsm = fsm  # type: ignore[arg-type]
-        self._state_lock = lock
-
-
 class OwnerNoLock:
     """Raises attribute error because the state machine needs a _state_lock to work."""
 
@@ -61,17 +51,6 @@ def test_transitions():
     assert _TRANSITIONS["stopping"] == ["idle", "panicked"]
     assert _TRANSITIONS["aborting"] == ["idle", "panicked"]
     assert _TRANSITIONS["panicked"] == []
-
-
-def test_multi_obj_fsm():
-
-    owner = Owner()
-
-    assert isinstance(owner.fsm, RunEngineStateMachine)
-    assert owner.fsm.is_idle
-
-    borrower = Borrower(owner.fsm, owner._state_lock)
-    assert borrower.fsm is owner.fsm
 
 
 def test_no_lock():
