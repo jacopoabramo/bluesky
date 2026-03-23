@@ -139,31 +139,13 @@ class RunEngineStateMachine:
 
 
 class MachineDescriptor:
-    """Descriptor-accessor for the state machine.
+    """State machine descriptor.
 
-    When providing the state machine type, the descriptor will
-    create a new instance of that type.
-    When no type is provided, it is expected that
-    the owning class will set an instance
-    of the state machine on itself before any access.
-
-    i.e.
-
-    class MyClass:
-        # the machine instance will be
-        # created automatically
-        state = MachineDescriptor(MyStateMachine)
-
-    class MyOtherClass:
-        # the class must provide the machine
-        # instance itself before any access
-        state = MachineDescriptor()
-
-        def __init__(self, fsm: MyStateMachine | None = None):
-            self.state = fsm or MyStateMachine()
+    Sets the new state via __set__ method
+    and logs the state change.
     """
 
-    def __init__(self, fsm_type: type[RunEngineStateMachine] | None = None) -> None:
+    def __init__(self, fsm_type: type[RunEngineStateMachine]) -> None:
         self._fsm_type = fsm_type
         self._memory: WeakKeyDictionary[RunEngine, RunEngineStateMachine] = WeakKeyDictionary()
 
@@ -178,19 +160,16 @@ class MachineDescriptor:
             return fsm
 
     @overload
-    def __get__(self, obj: None, owner: type) -> "MachineDescriptor": ...
+    def __get__(self, obj: None, _: type) -> "MachineDescriptor": ...
     @overload
-    def __get__(self, obj: "RunEngine", owner: type) -> RunEngineStateMachine: ...
-    def __get__(self, obj: "RunEngine | None", owner: type) -> "RunEngineStateMachine | MachineDescriptor":
+    def __get__(self, obj: "RunEngine", _: type) -> RunEngineStateMachine: ...
+    def __get__(self, obj: "RunEngine | None", _: type) -> "RunEngineStateMachine | MachineDescriptor":
         if obj is None:
             return self
         with obj._state_lock:
             return self._get_or_create(obj)
 
-    def __set__(self, obj: "RunEngine", value: str | REState | RunEngineStateMachine) -> None:
-        if isinstance(value, RunEngineStateMachine):
-            self._memory[obj] = value
-            return
+    def __set__(self, obj: "RunEngine", value: str | REState) -> None:
         with obj._state_lock:
             old, new = self._get_or_create(obj).set(value)
         tags = {"old_state": old, "new_state": new, "RE": self}
