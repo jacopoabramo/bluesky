@@ -68,7 +68,8 @@ def test_suspender(klass, sc_args, start_val, fail_val, resume_val, wait_time, R
     # assert we waited at least 2 seconds + the settle time
     delta = stop - start
     print(delta)
-    assert delta > 0.5 + wait_time + 0.2
+    # The suspension time is actually 0.5 - 0.1 = 0.4 seconds as timers run in parallel
+    assert delta > 0.4 + wait_time + 0.2
 
 
 def test_pretripped(RE, hw):
@@ -94,24 +95,30 @@ def test_pretripped(RE, hw):
 
 def test_suspender_wrapper(RE, hw):
 
+    wait_time = 0.2
+    sleep_time = 0.2
+    trigger_time = 0.5
+
     sig = hw.bool_sig
-    scan = [Msg("checkpoint"), Msg("sleep", None, 0.2)]
+    scan = [Msg("checkpoint"), Msg("sleep", None, sleep_time)]
     sig.put(0)
 
-    susp = SuspendBoolHigh(sig, sleep=1.0)
+
+
+    susp = SuspendBoolHigh(sig, sleep=wait_time)
 
     RE(suspend_wrapper(scan, susp))
     assert RE.state == "idle"
 
     sig.put(1)
-    threading.Timer(1, sig.put, (0,)).start()
+    threading.Timer(trigger_time, sig.put, (0,)).start()
 
     start = ttime.time()
 
     RE(suspend_wrapper(scan, susp))
     stop = ttime.time()
     delta = stop - start
-    assert delta > 1.0 + 0.8 + 0.2
+    assert delta > trigger_time + wait_time + sleep_time
 
 
 @pytest.mark.parametrize(
