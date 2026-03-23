@@ -138,7 +138,7 @@ class SuspenderBase(metaclass=ABCMeta):
                 if self._ev is None and self.RE is not None:
                     self.__make_event()
                     if self._ev is None:
-                        raise RuntimeError("Could not create the ")
+                        raise RuntimeError("Could not create the suspender event")
                     cb = partial(
                         self.RE.request_suspend,
                         self._ev.wait,

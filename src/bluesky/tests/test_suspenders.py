@@ -91,6 +91,26 @@ def test_pretripped(RE, hw):
     assert len(msg_lst) == 2
     assert ["wait_for", "checkpoint"] == [m[0] for m in msg_lst]
 
+def test_suspender_wrapper(RE, hw):
+
+    sig = hw.bool_sig
+    scan = [Msg("checkpoint"), Msg("sleep", None, 0.2)]
+    sig.put(0)
+
+    susp = SuspendBoolHigh(sig, sleep=1.0)
+
+    RE(suspend_wrapper(scan, susp))
+    assert RE.state == "idle"
+
+    sig.put(1)
+    threading.Timer(1, sig.put, (0,)).start()
+
+    start = ttime.time()
+
+    RE(suspend_wrapper(scan, susp))
+    stop = ttime.time()
+    delta = stop - start
+    assert delta > 1.0 + 0.8 + 0.2
 
 @pytest.mark.parametrize(
     "pre_plan,post_plan,expected_list",
