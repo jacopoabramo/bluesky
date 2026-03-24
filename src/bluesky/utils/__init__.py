@@ -14,10 +14,10 @@ import traceback
 import types
 import uuid
 import warnings
-from enum import Enum
 from collections import namedtuple
 from collections.abc import AsyncIterable, AsyncIterator, Awaitable, Callable, Generator, Iterable, Sequence
 from collections.abc import Iterable as TypingIterable
+from enum import Enum
 from functools import partial, reduce, wraps
 from inspect import Parameter, Signature
 from typing import (
@@ -301,15 +301,19 @@ class SigintHandler:
                 try:
                     self.RE.request_pause(defer=True)
                 except TransitionError:
-                    print("Deferred pause request failed. RunEngine is not in a pausable state. "
-                          "Inspect `RE.state` and try again after 10 seconds...")
+                    print(
+                        "Deferred pause request failed. RunEngine is not in a pausable state. "
+                        "Inspect `RE.state` and try again after 10 seconds..."
+                    )
             elif self.request == PauseRequest.HARD:
                 print("A 'hard pause' has been requested.")
                 try:
                     self.RE.request_pause(defer=False)
                 except TransitionError:
-                    print("Hard pause request failed. RunEngine is not in a pausable state."
-                          "Inspect `RE.state` and try again after 10 seconds...")
+                    print(
+                        "Hard pause request failed. RunEngine is not in a pausable state. "
+                        "Inspect `RE.state` and try again after 10 seconds..."
+                    )
 
             # Clear previous request and block until next request
             self.request_event.wait()
