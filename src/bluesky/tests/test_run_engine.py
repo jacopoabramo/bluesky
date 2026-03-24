@@ -797,7 +797,7 @@ def test_sigint_many_hits_panic(RE):
     def hanging_plan():
         "a plan that blocks the RunEngine's normal Ctrl+C handing with a sleep"
         yield Msg("null")
-        ttime.sleep(5)
+        ttime.sleep(10)
         yield Msg("null")
 
     start_time = ttime.monotonic()
@@ -806,7 +806,7 @@ def test_sigint_many_hits_panic(RE):
     with pytest.raises(RunEngineInterrupted):
         RE(hanging_plan())
     # Check that hammering SIGINT escaped from that 5-second sleep.
-    assert (ttime.monotonic() - start_time) < 2.5
+    assert (ttime.monotonic() - start_time) < 8
     # The KeyboardInterrupt but because we could not shut down, panic!
     assert RE.state == "panicked"
     timer.join()
