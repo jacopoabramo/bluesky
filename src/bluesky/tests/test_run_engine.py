@@ -45,6 +45,7 @@ from bluesky.run_engine import (
     TransitionError,
     WaitForTimeoutError,
 )
+from bluesky.suspenders import SuspendBoolHigh
 from bluesky.tests import requires_ophyd, uses_os_kill_sigint
 from bluesky.tests.utils import DocCollector, MsgCollector
 
@@ -898,6 +899,279 @@ def test_no_context_manager(RE):
     # Hanging plan finished, but extra sleep did not
     assert 2 < delta < 5
     timer.join()
+
+
+@uses_os_kill_sigint
+def test_single_sigint_interrupt_no_checkpoint(RE):
+    """A single SIGINT on a plan without a checkpoint continues running"""
+    pid = os.getpid()
+
+    event = threading.Event()
+
+    def msg_hook(msg):
+        if msg.command == "null":
+            event.set()
+
+    RE.msg_hook = msg_hook
+
+    def send_sigint():
+        # Wait for event
+        event.wait()
+        os.kill(pid, signal.SIGINT)
+
+    def test_plan():
+        for _ in range(15):
+            yield Msg("null")
+
+    # Single SIGINT defers a pause but plan finishes anyway
+    sigint_thread = threading.Thread(target=send_sigint, daemon=True)
+    sigint_thread.start()
+    RE(test_plan())
+
+    assert RE.state == "idle"
+    sigint_thread.join(timeout=0.1)
+
+
+@uses_os_kill_sigint
+def test_single_sigint_hits_checkpoint(RE):
+    """A single SIGINT on a plan with a checkpoint interrupts"""
+    pid = os.getpid()
+
+    event = threading.Event()
+
+    def msg_hook(msg):
+        if msg.command == "null":
+            event.set()
+
+    RE.msg_hook = msg_hook
+
+    def send_sigint():
+        event.wait()
+        os.kill(pid, signal.SIGINT)
+
+    def infinite_plan():
+        while True:
+            yield Msg("null")
+            yield from checkpoint()
+
+    # Single SIGINT reaches checkpoint
+    sigint_thread = threading.Thread(target=send_sigint, daemon=True)
+    sigint_thread.start()
+    with pytest.raises(RunEngineInterrupted):
+        RE(infinite_plan())
+
+    assert RE.state == "paused"
+    sigint_thread.join(timeout=0.1)
+
+
+@uses_os_kill_sigint
+def test_single_sigint_no_carry_over(RE):
+    """A single SIGINT does not pause at the next plan's checkpoint"""
+    pid = os.getpid()
+
+    event = threading.Event()
+
+    def msg_hook(msg):
+        if msg.command == "null":
+            event.set()
+
+    RE.msg_hook = msg_hook
+
+    def send_sigint():
+        # Wait for event
+        event.wait()
+        os.kill(pid, signal.SIGINT)
+
+    def test_plan():
+        for _ in range(5):
+            yield Msg("null")
+
+    # Single SIGINT defers a pause but plan finishes anyway
+    sigint_thread = threading.Thread(target=send_sigint, daemon=True)
+    sigint_thread.start()
+    RE(test_plan())
+    sigint_thread.join(timeout=0.1)
+
+    def checkpoint_plan():
+        for _ in range(10):
+            yield Msg("null")
+            yield from checkpoint()
+
+    RE(checkpoint_plan())
+    assert RE.state == "idle"
+
+
+@uses_os_kill_sigint
+def test_double_sigint_interrupts_now(RE):
+    """Two SIGINTs in succession interrupts immediately"""
+    pid = os.getpid()
+
+    running_event = threading.Event()
+    deferred_pause_done = threading.Event()
+
+    def msg_hook(msg):
+        if msg.command == "null":
+            running_event.set()
+
+    RE.msg_hook = msg_hook
+
+    _orig_request_pause = RE.request_pause
+
+    def _tracked_request_pause(defer=False):
+        result = _orig_request_pause(defer=defer)
+        if defer:
+            deferred_pause_done.set()
+        return result
+
+    RE.request_pause = _tracked_request_pause
+
+    def send_sigint():
+        running_event.wait(timeout=5)
+        os.kill(pid, signal.SIGINT)
+        # Wait at least 100ms to send second SIGINT
+        ttime.sleep(0.15)
+        deferred_pause_done.wait(timeout=5)
+        os.kill(pid, signal.SIGINT)
+
+    def test_plan():
+        while True:
+            yield Msg("null")
+
+    sigint_thread = threading.Thread(target=send_sigint, daemon=True)
+    sigint_thread.start()
+    with pytest.raises(RunEngineInterrupted):
+        RE(test_plan())
+
+    assert RE.state == "paused"
+
+    sigint_thread.join(timeout=0.1)
+
+
+@uses_os_kill_sigint
+def test_sigint_during_suspender_active(RE, hw):
+    pid = os.getpid()
+    states = []
+    running_event = threading.Event()
+    wait_for_reached = threading.Event()
+    deferred_pause_done = threading.Event()
+
+    def state_hook(new_state, old_state):
+        states.append((old_state, new_state))
+        if new_state == "running" and old_state == "idle":
+            running_event.set()
+
+    RE.state_hook = state_hook
+
+    def msg_hook(msg):
+        if msg.command == "wait_for":
+            wait_for_reached.set()
+
+    RE.msg_hook = msg_hook
+
+    _orig_request_pause = RE.request_pause
+
+    def _tracked_request_pause(defer=False):
+        result = _orig_request_pause(defer=defer)
+        if defer:
+            deferred_pause_done.set()
+        return result
+
+    RE.request_pause = _tracked_request_pause
+
+    bool_signal = hw.bool_sig
+    suspender = SuspendBoolHigh(bool_signal)
+    suspender.install(RE)
+    bool_signal.put(False)
+
+    def send_sigints():
+        wait_for_reached.wait(timeout=5)
+        os.kill(pid, signal.SIGINT)
+        # Wait at least 100ms to send second SIGINT
+        ttime.sleep(0.15)
+        deferred_pause_done.wait(timeout=5)
+        os.kill(pid, signal.SIGINT)
+
+    def trigger_suspend():
+        running_event.wait(timeout=5)
+        bool_signal.put(True)
+
+    def infinite_plan():
+        while True:
+            yield Msg("null")
+
+    sigint_thread = threading.Thread(target=send_sigints, daemon=True)
+    suspend_thread = threading.Thread(target=trigger_suspend, daemon=True)
+    sigint_thread.start()
+    suspend_thread.start()
+
+    with pytest.raises(RunEngineInterrupted):
+        RE(infinite_plan())
+
+    bool_signal.put(False)
+    sigint_thread.join(timeout=5)
+    suspend_thread.join(timeout=5)
+
+    assert ("running", "suspending") in states
+    assert ("running", "pausing") in states
+    assert RE.state == "paused"
+
+
+@uses_os_kill_sigint
+def test_sigint_pause_during_active_suspension_no_devices(RE, hw):
+    pid = os.getpid()
+    states = []
+    wait_for_reached = threading.Event()
+    deferred_pause_done = threading.Event()
+
+    def state_hook(new_state, old_state):
+        states.append((old_state, new_state))
+
+    RE.state_hook = state_hook
+
+    def msg_hook(msg):
+        if msg.command == "wait_for":
+            wait_for_reached.set()
+
+    RE.msg_hook = msg_hook
+
+    _orig_request_pause = RE.request_pause
+
+    def _tracked_request_pause(defer=False):
+        result = _orig_request_pause(defer=defer)
+        if defer:
+            deferred_pause_done.set()
+        return result
+
+    RE.request_pause = _tracked_request_pause
+
+    bool_signal = hw.bool_sig
+    suspender = SuspendBoolHigh(bool_signal)
+    bool_signal.put(True)
+    RE.install_suspender(suspender)
+
+    def send_sigints():
+        wait_for_reached.wait(timeout=5)
+        os.kill(pid, signal.SIGINT)
+        # Wait at least 100ms to send second SIGINT
+        ttime.sleep(0.15)
+        deferred_pause_done.wait(timeout=5)
+        os.kill(pid, signal.SIGINT)
+
+    sigint_thread = threading.Thread(target=send_sigints, daemon=True)
+    sigint_thread.start()
+
+    def plan():
+        while True:
+            yield Msg("null")
+
+    with pytest.raises(RunEngineInterrupted):
+        RE(plan())
+
+    bool_signal.put(False)
+    sigint_thread.join(timeout=5)
+
+    assert ("running", "pausing") in states
+    assert RE.state == "paused"
 
 
 def test_many_context_managers(RE):
