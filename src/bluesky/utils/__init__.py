@@ -301,19 +301,19 @@ class SigintHandler:
                 try:
                     self.RE.request_pause(defer=True)
                 except TransitionError:
-                    ...
-                self.request = PauseRequest.NONE
+                    print("Deferred pause request failed. RunEngine is not in a pausable state. "
+                          "Inspect `RE.state` and try again after 10 seconds...")
             elif self.request == PauseRequest.HARD:
-                print("trying a second time")
+                print("A 'hard pause' has been requested.")
                 try:
                     self.RE.request_pause(defer=False)
                 except TransitionError:
-                    ...
-                self.request_kind = PauseRequest.NONE
+                    print("Hard pause request failed. RunEngine is not in a pausable state."
+                          "Inspect `RE.state` and try again after 10 seconds...")
 
             # Clear previous request and block until next request
-            self.request_event.clear()
             self.request_event.wait()
+            self.request_event.clear()
 
     def __enter__(self):
         self.count = 0
@@ -328,26 +328,26 @@ class SigintHandler:
             # Assumptions:
             # - `self.last_sigint_time` is initialized on __enter__ with timestamp
             # - `self.count` is initialized on __enter__ with 0
-            if self.RE.state.is_running and (not self.RE._interrupted):
-                now = time.monotonic()
-                time_diff = now - self.last_sigint_time
+            now = time.monotonic()
+            time_diff = now - self.last_sigint_time
 
-                if time_diff > 10 or self.count == 0:
-                    # First pause request
-                    self.last_sigint_time = now
-                    self.count = 1
-                    self.request = PauseRequest.SOFT
-                    self.request_event.set()
-                elif time_diff > 0.1 and self.count > 0:
-                    # Second or more pause requests
-                    self.last_sigint_time = now
-                    self.count += 1
-                    if self.count < 11:
-                        self.request = PauseRequest.HARD
-                    else:
-                        self.released = True
-                        signal.signal(signal.SIGINT, self.original_handler)
-                    self.request_event.set()
+            if time_diff > 10 or self.count == 0:
+                # First pause request
+                self.last_sigint_time = now
+                self.count = 1
+                self.request = PauseRequest.SOFT
+                self.request_event.set()
+            elif time_diff > 0.1 and self.count > 0:
+                # Second or more pause requests
+                self.last_sigint_time = now
+                self.count += 1
+                if self.count < 11:
+                    self.request = PauseRequest.HARD
+                else:
+                    self.released = True
+                    signal.signal(signal.SIGINT, self.original_handler)
+                    self.original_handler(signum, frame)
+                self.request_event.set()
 
         signal.signal(signal.SIGINT, handler)
         return self

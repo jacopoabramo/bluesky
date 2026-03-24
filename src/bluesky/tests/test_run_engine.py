@@ -762,7 +762,7 @@ def test_sigint_many_hits_pln(RE):
     def sim_kill(n):
         for j in range(n):
             print("KILL", j)
-            ttime.sleep(0.05)
+            ttime.sleep(0.11)
             os.kill(pid, signal.SIGINT)
 
     def hanging_plan():
@@ -786,13 +786,12 @@ def test_sigint_many_hits_pln(RE):
 
 @uses_os_kill_sigint
 def test_sigint_many_hits_panic(RE):
-    raise pytest.skip("hangs tests on exit")
     pid = os.getpid()
 
     def sim_kill(n):
         for j in range(n):
             print("KILL", j, ttime.monotonic() - start_time)
-            ttime.sleep(0.05)
+            ttime.sleep(0.11)
             os.kill(pid, signal.SIGINT)
 
     def hanging_plan():
