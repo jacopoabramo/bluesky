@@ -360,8 +360,9 @@ class SigintHandler:
             Assumptions:
             - `self._last_sigint_time` is initialized on __enter__ with timestamp
             - `self._count` is initialized on __enter__ with 0
-            This callback must run very fast and cannot use any blocking I/O
-            (no threads, prints, locks, etc.)
+            This callback must run very fast and avoid heavy work (no threads, prints,
+            substantial I/O, etc.). Lightweight lock operations like Event.set() are
+            acceptable.
             """
             now = time.monotonic()
             time_diff = now - self._last_sigint_time
