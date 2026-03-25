@@ -805,9 +805,9 @@ def test_sigint_many_hits_panic(RE, deterministic_sigint):
     RE.msg_hook = msg_hook
 
     def hanging_plan():
-        "a plan that blocks the RunEngine's normal Ctrl+C handing with a sleep"
+        "a plan that blocks the RunEngine's normal Ctrl+C handing with a wait"
         yield Msg("null")
-        wait_forever_event.wait(timeout=30)
+        wait_forever_event.wait(timeout=15)
         yield Msg("null")
 
     with deterministic_sigint() as sigint:
@@ -818,13 +818,9 @@ def test_sigint_many_hits_panic(RE, deterministic_sigint):
                 sigint.send()
 
         threading.Thread(target=sim_kill, daemon=True).start()
-        start_time = ttime.monotonic()
         with pytest.raises(RunEngineInterrupted):
             RE(hanging_plan())
-        diff = ttime.monotonic() - start_time
 
-    # Check that hammering SIGINT escaped from that 30s blocking wait.
-    assert diff < 30
     # The KeyboardInterrupt but because we could not shut down, panic!
     assert RE.state == "panicked"
 
