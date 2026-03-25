@@ -1013,7 +1013,7 @@ def test_single_sigint_no_carry_over(RE):
         for _ in range(5):
             yield Msg("null")
             if first:
-                deferred_pause_done.wait(timeout=5)
+                deferred_pause_done.wait()
                 first = False
 
     # Single SIGINT defers a pause but plan finishes anyway
