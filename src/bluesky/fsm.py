@@ -152,9 +152,7 @@ class MachineDescriptor:
     def _get_or_create(self, obj: "RunEngine") -> RunEngineStateMachine:
         try:
             return self._memory[obj]
-        except KeyError as exc:
-            if self._fsm_type is None:
-                raise RuntimeError(f"{obj!r} has no FSM assigned and no FSM type was provided.") from exc
+        except KeyError:
             fsm = self._fsm_type()
             self._memory[obj] = fsm
             return fsm
