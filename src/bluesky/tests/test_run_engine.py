@@ -49,6 +49,7 @@ from bluesky.run_engine import (
 from bluesky.suspenders import SuspendBoolHigh
 from bluesky.tests import requires_ophyd, uses_os_kill_sigint
 from bluesky.tests.utils import DocCollector, MsgCollector
+from bluesky.utils import SigintHandler
 
 from .utils import _careful_event_set, _fabricate_asycio_event
 
@@ -1212,6 +1213,140 @@ def test_sigint_pause_during_active_suspension_no_devices(RE, hw):
 
     assert ("running", "pausing") in states
     assert RE.state == "paused"
+
+
+@uses_os_kill_sigint
+def test_sigint_in_not_pausable_state(RE):
+    """A SIGINT arriving while the RE is not pausable must not crash the
+    watcher thread.
+
+    Sequence of events:
+
+    1. ``send_sigints`` thread sends two SIGINTs (soft then hard) to
+       trigger a hard pause.  The RE transitions running -> pausing -> paused.
+    2. On the main thread's teardown path, ``GateContext.__exit__`` runs
+       *before* ``SigintHandler.__exit__`` (LIFO order).  It sleeps 0.15 s
+       to clear the signal handler's 0.1 s debounce window, then sends an
+       extra SIGINT.  Because ``SigintHandler`` is still installed, the
+       handler routes the signal to the watcher thread.
+    3. The watcher thread calls ``request_pause`` while the RE is paused
+       (not pausable), hitting ``TransitionError``.  Our monkey-patched
+       ``_tracked_request_pause`` sets ``transition_error_hit`` when this
+       happens.
+    4. We assert that the ``TransitionError`` was caught (not raised), and
+       prove the watcher thread survived by resuming + pausing a second time.
+
+    """
+    pid = os.getpid()
+
+    running_event = threading.Event()
+    deferred_pause_done = threading.Event()
+    hard_pause_done = threading.Event()
+    transition_error_hit = threading.Event()
+
+    def msg_hook(msg):
+        if msg.command == "null":
+            running_event.set()
+
+    RE.msg_hook = msg_hook
+
+    _orig_request_pause = RE.request_pause
+
+    def _tracked_request_pause(defer=False):
+        try:
+            result = _orig_request_pause(defer=defer)
+        except TransitionError:
+            transition_error_hit.set()
+            raise
+        if defer:
+            deferred_pause_done.set()
+        else:
+            hard_pause_done.set()
+        return result
+
+    RE.request_pause = _tracked_request_pause
+
+    class GateContext:
+        """Entered after SigintHandler (exited before it in LIFO order).
+
+        On exit, waits for the hard pause to complete, then sends an
+        extra SIGINT after 0.15 s (clearing the handler's 0.1 s debounce).
+        This guarantees the ``SigintHandler`` is still installed when the
+        extra signal arrives.
+        """
+
+        def __init__(self, RE):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            # Wait for the hard pause to land.
+            hard_pause_done.wait(timeout=5)
+            # Sleep past the 0.1 s debounce window so the signal handler
+            # accepts this SIGINT instead of silently dropping it.
+            ttime.sleep(0.15)
+            os.kill(pid, signal.SIGINT)
+            # Wait for the watcher thread to process the request and
+            # hit TransitionError.
+            transition_error_hit.wait(timeout=5)
+
+    RE.context_managers = [SigintHandler, GateContext]
+
+    def infinite_plan():
+        while True:
+            yield Msg("null")
+
+    def send_sigints():
+        running_event.wait(timeout=5)
+        os.kill(pid, signal.SIGINT)
+        ttime.sleep(0.15)
+        deferred_pause_done.wait(timeout=5)
+        os.kill(pid, signal.SIGINT)
+
+    sigint_thread = threading.Thread(target=send_sigints, daemon=True)
+    sigint_thread.start()
+    with pytest.raises(RunEngineInterrupted):
+        RE(infinite_plan())
+    sigint_thread.join(timeout=5)
+
+    assert transition_error_hit.is_set()
+    assert RE.state == "paused"
+
+    # Prove the watcher thread survived: resume the RE, then pause it
+    # again with SIGINTs.  If the watcher had died from an uncaught
+    # TransitionError, request_pause would never be called and the
+    # infinite plan would run forever.
+    running_event.clear()
+    deferred_pause_done.clear()
+
+    # Replace with a simple tracker and remove the gate for the
+    # resume cycle.
+    def _simple_tracked_request_pause(defer=False):
+        result = _orig_request_pause(defer=defer)
+        if defer:
+            deferred_pause_done.set()
+        return result
+
+    RE.request_pause = _simple_tracked_request_pause
+    RE.context_managers = [SigintHandler]
+
+    def send_sigints_again():
+        running_event.wait(timeout=5)
+        os.kill(pid, signal.SIGINT)
+        ttime.sleep(0.15)
+        deferred_pause_done.wait(timeout=5)
+        os.kill(pid, signal.SIGINT)
+
+    sigint_thread2 = threading.Thread(target=send_sigints_again, daemon=True)
+    sigint_thread2.start()
+    with pytest.raises(RunEngineInterrupted):
+        RE.resume()
+    sigint_thread2.join(timeout=5)
+
+    assert RE.state == "paused"
+    RE.abort()
 
 
 def test_many_context_managers(RE):
