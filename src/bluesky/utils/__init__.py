@@ -364,6 +364,8 @@ class SigintHandler:
             substantial I/O, etc.). Lightweight lock operations like Event.set() are
             acceptable.
             """
+            if self._released:
+                self._original_handler(signum, frame)
             now = time.monotonic()
             time_diff = now - self._last_sigint_time
 
@@ -381,7 +383,6 @@ class SigintHandler:
                     self._request = PauseRequest.HARD
                 else:
                     self._released = True
-                    signal.signal(signal.SIGINT, self._original_handler)
                     self._original_handler(signum, frame)
                 self._request_event.set()
 
@@ -390,9 +391,9 @@ class SigintHandler:
         return self
 
     def __exit__(self, type, value, tb) -> None:
+        signal.signal(signal.SIGINT, self._original_handler)
         if not self._released:
             self._released = True
-            signal.signal(signal.SIGINT, self._original_handler)
             self._request_event.set()
 
 
