@@ -15,6 +15,7 @@ Added
 
 Fixed
 -----
+
 - Bug where ``SIGINT`` counting had a data race on very rapid presses, causing unreliable pausing behavior
 - Data saved from ``read_configuration()`` is now cached per stream, fixing subtle cache invalidation issues
 - ``TypeError`` on ``np.round`` in the ``%wa`` Bluesky magic with a multi-axis ``PsuedoPositioner`` coming from Numpy 2.0 change
